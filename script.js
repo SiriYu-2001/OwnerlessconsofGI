@@ -23,11 +23,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const PATCHES_PER_YEAR = 9;
 
     const HISTORICAL_PHASES = [
-        { name: '1.0-2.8', patches: 16, startVersion: 1.0, chars: 5, offBannerRate: 0.5 },
+        { name: '1.0-2.8', patches: 17, startVersion: 1.0, chars: 5, offBannerRate: 0.5 },
         { name: '3.0-3.4', patches: 5, startVersion: 3.0, chars: 6, offBannerRate: 0.5 },
-        { name: '3.5-4.8', patches: 13, startVersion: 3.5, chars: 7, offBannerRate: 0.5 },
+        { name: '3.5-4.8', patches: 12, startVersion: 3.5, chars: 7, offBannerRate: 0.5 },
         { name: '5.0-5.3', patches: 4, startVersion: 5.0, chars: 7, offBannerRate: 0.45 },
-        { name: '5.4-Present', patches: 6, startVersion: 5.4, chars: 8, offBannerRate: 0.45 }
+        { name: '5.4-Present', patches: 5, startVersion: 5.4, chars: 8, offBannerRate: 0.45 }
     ];
     
     const STANDARD_CHARS_BY_VERSION = {
@@ -72,6 +72,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function findTargetCharacter(constellations, strategy, pool) {
+        if (!pool || pool.length === 0) return null;
+        
         let relevantCons = pool.map(char => constellations[char]);
         let targetValue = strategy === 'lowest' ? Math.min(...relevantCons) : Math.max(...relevantCons);
         const candidates = pool.filter(char => constellations[char] === targetValue);
@@ -144,6 +146,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const state = {
                     pity: 0, isGuaranteed: false,
                     constellations: Object.fromEntries(CURRENT_STANDARD_CHARS.map(c => [c, 0])),
+                    receivedOneTimeBonus: new Set(), // NEW: Track one-time bonuses
                 };
                 const standardState = {
                     pity: 0, charPity: 0, wepPity: 0,
@@ -163,19 +166,27 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     const yearsInPhase = Math.floor(phase.patches / PATCHES_PER_YEAR);
                     if (yearsInPhase > 0) {
-                        if (phase.startVersion >= 5.0) {
-                             for (let y = 0; y < yearsInPhase; y++) {
+                        for (let y = 0; y < yearsInPhase; y++) {
+                            // Logic for +1 self-select (always happens after 5.0)
+                            if (phase.startVersion >= 5.0) {
                                 const targetChar = findTargetCharacter(state.constellations, inputs.strategy, currentPool);
-                                state.constellations[targetChar]++;
-                             }
-                        }
-                        if (phase.startVersion >= 6.0) {
-                             for (let y = 0; y < yearsInPhase; y++) {
-                                 for (let k = 0; k < inputs.extraConsPerYear; k++) {
-                                    const targetChar = findTargetCharacter(state.constellations, inputs.strategy, currentPool);
-                                    state.constellations[targetChar]++;
-                                 }
-                             }
+                                if(targetChar) state.constellations[targetChar]++;
+                            }
+                            // Logic for +x one-time bonus (only after 6.0)
+                            if (phase.startVersion >= 6.0 && inputs.extraConsPerYear > 0) {
+                                let eligibleForXBonus = currentPool.filter(char => !state.receivedOneTimeBonus.has(char));
+                                const numBonusesToGive = Math.min(inputs.extraConsPerYear, eligibleForXBonus.length);
+
+                                for (let k = 0; k < numBonusesToGive; k++) {
+                                    const targetChar = findTargetCharacter(state.constellations, inputs.strategy, eligibleForXBonus);
+                                    if(targetChar) {
+                                        state.constellations[targetChar]++;
+                                        state.receivedOneTimeBonus.add(targetChar);
+                                        // Remove from this year's eligibility list
+                                        eligibleForXBonus = eligibleForXBonus.filter(c => c !== targetChar);
+                                    }
+                                }
+                            }
                         }
                     }
                 });
@@ -233,7 +244,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 let state = {
                     pity: inputs.limitedPity, isGuaranteed: inputs.isGuaranteed,
-                    constellations: { ...initialConsWithFuture }
+                    constellations: { ...initialConsWithFuture },
+                    receivedOneTimeBonus: new Set(), // Starts empty for future prediction
                 };
                 let standardState = {
                     pity: inputs.standardPity, charPity: inputs.charPity, wepPity: inputs.wepPity,
@@ -245,11 +257,23 @@ document.addEventListener('DOMContentLoaded', function () {
                     standardState.charPoolSize = state.charPoolSize;
                     const currentPool = STANDARD_CHARS_BY_VERSION[state.charPoolSize];
                     
+                    // Handle +1 self-select
                     const targetCharSelect = findTargetCharacter(state.constellations, inputs.strategy, currentPool);
-                    state.constellations[targetCharSelect]++;
-                    for (let k = 0; k < inputs.extraConsPerYear; k++) {
-                        const targetCharExtra = findTargetCharacter(state.constellations, inputs.strategy, currentPool);
-                        state.constellations[targetCharExtra]++;
+                    if (targetCharSelect) state.constellations[targetCharSelect]++;
+                    
+                    // Handle +x one-time bonus
+                    if (inputs.extraConsPerYear > 0) {
+                        let eligibleForXBonus = currentPool.filter(char => !state.receivedOneTimeBonus.has(char));
+                        const numBonusesToGive = Math.min(inputs.extraConsPerYear, eligibleForXBonus.length);
+
+                        for (let k = 0; k < numBonusesToGive; k++) {
+                            const targetChar = findTargetCharacter(state.constellations, inputs.strategy, eligibleForXBonus);
+                            if(targetChar) {
+                                state.constellations[targetChar]++;
+                                state.receivedOneTimeBonus.add(targetChar);
+                                eligibleForXBonus = eligibleForXBonus.filter(c => c !== targetChar);
+                            }
+                        }
                     }
 
                     for (let p = 0; p < PATCHES_PER_YEAR; p++) {
@@ -278,8 +302,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const stdDev = Math.sqrt(variance);
 
         historicalStatsDiv.innerHTML = `
-            <div>期望 (Mean)<span class="stat-value">${mean.toFixed(2)}</span></div>
-            <div>标准差 (Std Dev)<span class="stat-value">${stdDev.toFixed(2)}</span></div>
+            <div>溢出命星期望 (Mean Overflow)<span class="stat-value">${mean.toFixed(2)}</span></div>
+            <div>溢出命星标准差 (Std Dev)<span class="stat-value">${stdDev.toFixed(2)}</span></div>
         `;
     }
 
@@ -360,21 +384,14 @@ document.addEventListener('DOMContentLoaded', function () {
     populateConstellationGrid();
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
-            // 1. 获取目标页面的ID
-            const targetPageId = button.dataset.page;
-            const targetPage = document.getElementById(targetPageId);
-
-            // 2. 隐藏所有页面，并取消所有按钮的激活状态
-            pages.forEach(p => p.classList.remove('active'));
-            tabButtons.forEach(b => b.classList.remove('active'));
-
-            // 3. 激活被点击的按钮和对应的页面
-            if (targetPage) {
-                targetPage.classList.add('active');
-            }
-            button.classList.add('active');
+             const pageId = button.getAttribute('data-page');
+             showTab(pageId);
         });
     });
+    // Correctly bind tab switching
+    document.getElementById('tab-hist').addEventListener('click', () => showTab('historical'));
+    document.getElementById('tab-future').addEventListener('click', () => showTab('future'));
+
     runHistoricalSimBtn.addEventListener('click', runHistoricalSimulation);
     runFutureSimBtn.addEventListener('click', runFutureSimulation);
 });
