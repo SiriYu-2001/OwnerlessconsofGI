@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genshin Impact - Standard Character Constellation Simulator</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Chart.js global settings for dark theme
+        Chart.defaults.color = '#a9b1d6';
+        Chart.defaults.borderColor = '#444a5f';
+    </script>
+</head>
+<body>
+    <div id="loader-overlay" class="loader-overlay hidden">
+        <div class="loader"></div>
+        <p>正在进行蒙特卡洛模拟... (Running Monte Carlo Simulation...)</p>
+    </div>
+
+    <header>
+        <h1>原神常驻角色溢出命星模拟器</h1>
+        <p>Genshin Impact Standard Character Overflow Constellation Simulator</p>
+    </header>
+
+    <main>
+        <div class="tabs">
+            <button id="tab-hist" class="tab-button active" data-page="historical">历史模拟 (Historical)</button>
+            <button id="tab-future" class="tab-button" data-page="future">未来预测 (Future)</button>
+        </div>
+
+        <div id="historical" class="page active">
+            <p>根据各版本阶段的平均抽卡投入，模拟从1.0版本至今您可能获得的常驻角色命座总溢出数。</p>
+            
+            <fieldset>
+                <legend>角色限定池平均每版本投入 (Limited Banner Pulls / Patch)</legend>
+                <div class="input-grid">
+                    <div class="input-group"><label for="hist-limited-1">1.0 - 2.8:</label><input type="number" id="hist-limited-1" value="60" step="0.1"></div>
+                    <div class="input-group"><label for="hist-limited-2">3.0 - 3.4:</label><input type="number" id="hist-limited-2" value="70" step="0.1"></div>
+                    <div class="input-group"><label for="hist-limited-3">3.5 - 4.8:</label><input type="number" id="hist-limited-3" value="80" step="0.1"></div>
+                    <div class="input-group"><label for="hist-limited-4">5.0 - 5.3:</label><input type="number" id="hist-limited-4" value="90" step="0.1"></div>
+                    <div class="input-group"><label for="hist-limited-5">5.4 -至今:</label><input type="number" id="hist-limited-5" value="90" step="0.1"></div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>常驻池平均每版本投入 (Standard Banner Pulls / Patch)</legend>
+                <div class="input-grid">
+                    <div class="input-group"><label for="hist-standard-1">1.0 - 2.8:</label><input type="number" id="hist-standard-1" value="10" step="0.1"></div>
+                    <div class="input-group"><label for="hist-standard-2">3.0 - 3.4:</label><input type="number" id="hist-standard-2" value="10" step="0.1"></div>
+                    <div class="input-group"><label for="hist-standard-3">3.5 - 4.8:</label><input type="number" id="hist-standard-3" value="10" step="0.1"></div>
+                    <div class="input-group"><label for="hist-standard-4">5.0 - 5.3:</label><input type="number" id="hist-standard-4" value="10" step="0.1"></div>
+                    <div class="input-group"><label for="hist-standard-5">5.4 -至今:</label><input type="number" id="hist-standard-5" value="10" step="0.1"></div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>模拟参数 (Simulation Parameters)</legend>
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label for="hist-extra-cons">6.0后每年自选命座 (From 6.0+, Cons./Year):</label>
+                        <input type="number" id="hist-extra-cons" value="1" min="0" max="4">
+                    </div>
+                    <div class="input-group">
+                        <label for="hist-constellation-strategy">命座选择策略 (Cons. Strategy):</label>
+                        <select id="hist-constellation-strategy">
+                            <option value="lowest">补全最低命座 (Lowest Constellation)</option>
+                            <option value="highest">追满最高命座 (Highest Constellation)</option>
+                        </select>
+                    </div>
+                    <div class="input-group wide">
+                        <label for="hist-simulation-runs">模拟次数 (Simulation Runs):</label>
+                        <input type="number" id="hist-simulation-runs" value="10000" min="100" step="100">
+                    </div>
+                </div>
+            </fieldset>
+            <button id="run-historical-sim" class="run-button">开始模拟</button>
+            
+            <div id="historical-results" class="results-container hidden">
+                <h4>模拟结果</h4>
+                <div id="historical-stats"></div>
+                <canvas id="historical-chart"></canvas>
+                <div id="historical-breakdown">
+                    <h4>各角色平均情况 (Per-Character Averages)</h4>
+                    <table id="historical-breakdown-table">
+                        <thead>
+                            <tr>
+                                <th>角色 (Character)</th>
+                                <th>平均获得数 (Avg. Copies)</th>
+                                <th>平均溢出命星 (Avg. Overflow)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="future" class="page">
+            <p>根据您当前的持有情况和未来的抽卡计划，预测未来1-5年内常驻角色命座的溢出情况。</p>
+            <details open>
+                <summary>第一步: 填写当前持有情况与进度</summary>
+                <fieldset>
+                    <legend>当前常驻角色持有情况 (Current Constellations)</legend>
+                    <div class="input-grid" id="current-cons-grid"></div>
+                </fieldset>
+                <fieldset>
+                    <legend>当前抽卡进度 (Current Pity)</legend>
+                    <div class="input-grid">
+                        <div class="input-group"><label for="future-limited-pity">限定池垫抽 (Limited Pity):</label><input type="number" id="future-limited-pity" value="0"></div>
+                        <div class="input-group"><label for="future-limited-guarantee">大保底 (Guaranteed):</label><select id="future-limited-guarantee"><option value="false">否 (No)</option><option value="true">是 (Yes)</option></select></div>
+                        <div class="input-group"><label for="future-standard-pity">常驻池5星垫抽 (Std 5* Pity):</label><input type="number" id="future-standard-pity" value="0"></div>
+                        <div class="input-group"><label for="future-standard-char-pity">常驻池角色垫抽 (Std Char Pity):</label><input type="number" id="future-standard-char-pity" value="0"></div>
+                        <div class="input-group"><label for="future-standard-wep-pity">常驻池武器垫抽 (Std Wep Pity):</label><input type="number" id="future-standard-wep-pity" value="0"></div>
+                    </div>
+                </fieldset>
+            </details>
+            <details open>
+                <summary>第二步: 填写未来计划与参数</summary>
+                <fieldset>
+                    <legend>未来计划与参数 (Future Plan & Parameters)</legend>
+                    <div class="input-grid">
+                        <div class="input-group"><label for="future-limited-pulls">限定池每版本投入 (Limited/Patch):</label><input type="number" id="future-limited-pulls" value="90" step="0.1"></div>
+                        <div class="input-group"><label for="future-standard-pulls">常驻池每版本投入 (Standard/Patch):</label><input type="number" id="future-standard-pulls" value="10" step="0.1"></div>
+                        <div class="input-group"><label for="future-extra-cons">每年自选命座数 (Cons./Year):</label><input type="number" id="future-extra-cons" value="1" min="0" max="4"></div>
+                        <div class="input-group"><label for="future-constellation-strategy">命座选择策略 (Cons. Strategy):</label><select id="future-constellation-strategy"><option value="lowest">补全最低命座 (Lowest Constellation)</option><option value="highest">追满最高命座 (Highest Constellation)</option></select></div>
+                        <div class="input-group wide"><label for="future-simulation-runs">模拟次数 (Simulation Runs):</label><input type="number" id="future-simulation-runs" value="10000" min="100" step="100"></div>
+                    </div>
+                </fieldset>
+            </details>
+            <button id="run-future-sim" class="run-button">开始预测</button>
+
+            <div id="future-results" class="results-container hidden">
+                <h4>预测结果</h4>
+                <p>下图展示了未来5年内，您总溢出命星数量的95%置信区间（2.5%~97.5%）和中位数（50%）的趋势。</p>
+                <canvas id="future-chart"></canvas>
+                <div class="chart-grid" id="future-distribution-charts"></div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Genshin Gacha Simulator &copy; 2025. All Rights Reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
